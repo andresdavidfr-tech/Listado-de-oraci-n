@@ -88,6 +88,7 @@ export default function App() {
   const [mutedUntil, setMutedUntil] = useState<number | null>(null);
   const [darkMode, setDarkMode] = useState<boolean>(false);
   const [vow, setVow] = useState<PrayerVow>({ active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null });
+  const [history, setHistory] = useState<any[]>([]);
   const [vowForm, setVowForm] = useState({ totalDays: 7, minutesPerDay: 15, motives: '' });
   
   const [newTopicTitle, setNewTopicTitle] = useState('');
@@ -151,11 +152,14 @@ export default function App() {
 
     const userDocRef = doc(db, 'users', user.uid);
     const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-      if (docSnap.exists()) {
+      // Only update state if the snapshot is not from a local write
+      // to avoid reverting state while the user is interacting
+      if (docSnap.exists() && !docSnap.metadata.hasPendingWrites) {
         const data = docSnap.data();
         setTopics(data.topics || DEFAULT_TOPICS);
         setVow(data.vow || { active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null });
         setLastResetDate(data.lastResetDate || new Date().toDateString());
+        setHistory(data.history || []);
         
         const settings = data.settings || {};
         setNotificationsEnabled(settings.notificationsEnabled || false);
@@ -164,7 +168,7 @@ export default function App() {
         setReminderDays(settings.reminderDays || [0, 1, 2, 3, 4, 5, 6]);
         setMutedUntil(settings.mutedUntil || null);
         setDarkMode(settings.darkMode || false);
-      } else {
+      } else if (!docSnap.exists()) {
         // Initialize user doc if it doesn't exist
         saveToFirestore();
       }
@@ -182,6 +186,7 @@ export default function App() {
         photoURL: user.photoURL,
         topics,
         vow,
+        history,
         lastResetDate,
         settings: {
           notificationsEnabled,
@@ -203,6 +208,7 @@ export default function App() {
       localStorage.setItem('prayer-topics', JSON.stringify(topics));
       localStorage.setItem('prayer-notifications', String(notificationsEnabled));
       localStorage.setItem('prayer-vow', JSON.stringify(vow));
+      localStorage.setItem('prayer-history', JSON.stringify(history));
       localStorage.setItem('prayer-reminder-time', reminderTime);
       localStorage.setItem('prayer-reminder-freq', reminderFrequency);
       localStorage.setItem('prayer-reminder-days', JSON.stringify(reminderDays));
@@ -212,7 +218,7 @@ export default function App() {
     } else {
       saveToFirestore();
     }
-  }, [topics, notificationsEnabled, vow, reminderTime, reminderFrequency, reminderDays, mutedUntil, darkMode, user]);
+  }, [topics, notificationsEnabled, vow, history, reminderTime, reminderFrequency, reminderDays, mutedUntil, darkMode, user]);
 
   // Apply dark mode class to html
   useEffect(() => {
@@ -227,6 +233,12 @@ export default function App() {
   useEffect(() => {
     const today = new Date().toDateString();
     if (today !== lastResetDate) {
+      // Save current progress to history before resetting
+      const completedItems = topics.flatMap(t => t.items.filter(i => i.checked).map(i => i.text));
+      if (completedItems.length > 0) {
+        setHistory(prev => [{ date: lastResetDate, items: completedItems }, ...prev].slice(0, 30)); // Keep last 30 days
+      }
+
       setTopics(prevTopics => 
         prevTopics.map(topic => ({
           ...topic,
@@ -234,9 +246,12 @@ export default function App() {
         }))
       );
       setLastResetDate(today);
-      if (!user) localStorage.setItem('prayer-last-reset', today);
+      if (!user) {
+        localStorage.setItem('prayer-last-reset', today);
+        localStorage.setItem('prayer-history', JSON.stringify([{ date: lastResetDate, items: completedItems }, ...history].slice(0, 30)));
+      }
     }
-  }, [lastResetDate, user]);
+  }, [lastResetDate, user, topics]);
 
   // Notifications Logic
   useEffect(() => {
@@ -1053,6 +1068,27 @@ export default function App() {
                   </div>
                 </>
               )}
+
+              <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+                <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-slate-500 dark:text-slate-400" />
+                  Historial de Oración
+                </h3>
+                <div className="space-y-3">
+                  {history.length === 0 ? (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 italic">No hay historial registrado aún. Tu progreso se guardará al final del día.</p>
+                  ) : (
+                    history.map((entry, idx) => (
+                      <div key={idx} className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-xl border border-slate-100 dark:border-slate-700">
+                        <div className="text-[10px] font-bold text-blue-600 dark:text-blue-400 uppercase mb-1">{entry.date}</div>
+                        <div className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">
+                          {entry.items.join(', ')}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
             </div>
             <div className="p-5 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-end shrink-0">
               <button
