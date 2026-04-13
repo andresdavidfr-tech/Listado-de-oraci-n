@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User settings and prayer data",
+      "type": "object",
+      "properties": {
+        "topics": { "type": "array", "description": "List of prayer topics and items" },
+        "vow": { "type": "object", "description": "Current prayer vow status" },
+        "settings": { "type": "object", "description": "Notification and app settings" },
+        "lastResetDate": { "type": "string", "format": "date" }
+      },
+      "required": ["topics", "settings"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User specific data"
+    }
+  }
+}

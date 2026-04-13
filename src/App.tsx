@@ -1,17 +1,24 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle } from 'lucide-react';
+import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder } from 'lucide-react';
 import { Reorder } from 'motion/react';
+import { auth, db, googleProvider, outlookProvider } from './firebase';
+import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { doc, getDoc, setDoc, onSnapshot } from 'firebase/firestore';
 
 // --- Types ---
+type Frequency = 'daily' | 'weekly';
+
 type PrayerItem = {
   id: string;
   text: string;
   checked: boolean;
+  startDate?: string;
 };
 
 type Topic = {
   id: string;
   title: string;
+  icon?: string;
   items: PrayerItem[];
 };
 
@@ -26,6 +33,10 @@ type PrayerVow = {
 };
 
 // --- Data ---
+const AVAILABLE_ICONS: Record<string, React.ElementType> = {
+  Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder
+};
+
 const VERSES = [
   { text: "Orad sin cesar.", ref: "1 Tesalonicenses 5:17" },
   { text: "Con toda oración y petición orando en todo tiempo en el espíritu, y para ello velando con toda perseverancia y petición por todos los santos", ref: "Efesios 6:18" },
@@ -40,6 +51,7 @@ const DEFAULT_TOPICS: Topic[] = [
   {
     id: '1',
     title: 'Hermanos de la iglesia',
+    icon: 'Users',
     items: [
       { id: '1-1', text: 'Hermano Juan', checked: false },
       { id: '1-2', text: 'Hermano Pedro', checked: false },
@@ -48,50 +60,43 @@ const DEFAULT_TOPICS: Topic[] = [
   {
     id: '2',
     title: 'Familia',
+    icon: 'Home',
     items: []
   },
   {
     id: '3',
     title: 'Carga personal',
+    icon: 'Heart',
     items: []
   }
 ];
 
 export default function App() {
+  // --- Auth State ---
+  const [user, setUser] = useState<FirebaseUser | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
   // --- State ---
-  const [topics, setTopics] = useState<Topic[]>(() => {
-    const saved = localStorage.getItem('prayer-topics');
-    return saved ? JSON.parse(saved) : DEFAULT_TOPICS;
-  });
-  
-  const [lastResetDate, setLastResetDate] = useState<string>(() => {
-    return localStorage.getItem('prayer-last-reset') || new Date().toDateString();
-  });
-
-  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(() => {
-    return localStorage.getItem('prayer-notifications') === 'true';
-  });
-
+  const [topics, setTopics] = useState<Topic[]>(DEFAULT_TOPICS);
+  const [lastResetDate, setLastResetDate] = useState<string>(new Date().toDateString());
+  const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [reminderTime, setReminderTime] = useState<string>(() => {
-    return localStorage.getItem('prayer-reminder-time') || '08:00';
-  });
-  const [lastNotifiedDate, setLastNotifiedDate] = useState<string>(() => {
-    return localStorage.getItem('prayer-last-notified') || '';
-  });
-
+  const [reminderTime, setReminderTime] = useState<string>('08:00');
+  const [lastNotifiedDate, setLastNotifiedDate] = useState<string>('');
+  const [reminderFrequency, setReminderFrequency] = useState<Frequency>('daily');
+  const [reminderDays, setReminderDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
+  const [mutedUntil, setMutedUntil] = useState<number | null>(null);
+  const [vow, setVow] = useState<PrayerVow>({ active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null });
+  const [vowForm, setVowForm] = useState({ totalDays: 7, minutesPerDay: 15, motives: '' });
+  
   const [newTopicTitle, setNewTopicTitle] = useState('');
+  const [newTopicIcon, setNewTopicIcon] = useState<string>('Folder');
   const [newItemTexts, setNewItemTexts] = useState<Record<string, string>>({});
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItemText, setEditingItemText] = useState('');
 
-  // New States
-  const [vow, setVow] = useState<PrayerVow>(() => {
-    const saved = localStorage.getItem('prayer-vow');
-    return saved ? JSON.parse(saved) : { active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null };
-  });
-  const [vowForm, setVowForm] = useState({ totalDays: 7, minutesPerDay: 15, motives: '' });
-  
+  const [activeReminder, setActiveReminder] = useState<boolean>(false);
+
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
 
@@ -107,16 +112,87 @@ export default function App() {
   }, []);
 
   // --- Effects ---
-  
-  // Save topics to local storage
-  useEffect(() => {
-    localStorage.setItem('prayer-topics', JSON.stringify(topics));
-  }, [topics]);
 
-  // Save notifications preference
+  // Auth Listener
   useEffect(() => {
-    localStorage.setItem('prayer-notifications', String(notificationsEnabled));
-  }, [notificationsEnabled]);
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setIsAuthLoading(false);
+      if (!firebaseUser) {
+        // Load from local storage if not logged in
+        const savedTopics = localStorage.getItem('prayer-topics');
+        if (savedTopics) setTopics(JSON.parse(savedTopics));
+        const savedSettings = localStorage.getItem('prayer-notifications');
+        if (savedSettings) setNotificationsEnabled(savedSettings === 'true');
+        const savedVow = localStorage.getItem('prayer-vow');
+        if (savedVow) setVow(JSON.parse(savedVow));
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Firestore Sync
+  useEffect(() => {
+    if (!user) return;
+
+    const userDocRef = doc(db, 'users', user.uid);
+    const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setTopics(data.topics || DEFAULT_TOPICS);
+        setVow(data.vow || { active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null });
+        setLastResetDate(data.lastResetDate || new Date().toDateString());
+        
+        const settings = data.settings || {};
+        setNotificationsEnabled(settings.notificationsEnabled || false);
+        setReminderTime(settings.reminderTime || '08:00');
+        setReminderFrequency(settings.reminderFrequency || 'daily');
+        setReminderDays(settings.reminderDays || [0, 1, 2, 3, 4, 5, 6]);
+        setMutedUntil(settings.mutedUntil || null);
+      } else {
+        // Initialize user doc if it doesn't exist
+        saveToFirestore();
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  const saveToFirestore = async () => {
+    if (!user) return;
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        topics,
+        vow,
+        lastResetDate,
+        settings: {
+          notificationsEnabled,
+          reminderTime,
+          reminderFrequency,
+          reminderDays,
+          mutedUntil
+        }
+      });
+    } catch (error) {
+      console.error("Error saving to Firestore:", error);
+    }
+  };
+
+  // Save to local storage as fallback/guest mode
+  useEffect(() => {
+    if (!user) {
+      localStorage.setItem('prayer-topics', JSON.stringify(topics));
+      localStorage.setItem('prayer-notifications', String(notificationsEnabled));
+      localStorage.setItem('prayer-vow', JSON.stringify(vow));
+      localStorage.setItem('prayer-reminder-time', reminderTime);
+      localStorage.setItem('prayer-reminder-freq', reminderFrequency);
+      localStorage.setItem('prayer-reminder-days', JSON.stringify(reminderDays));
+      if (mutedUntil) localStorage.setItem('prayer-muted-until', mutedUntil.toString());
+      else localStorage.removeItem('prayer-muted-until');
+    } else {
+      saveToFirestore();
+    }
+  }, [topics, notificationsEnabled, vow, reminderTime, reminderFrequency, reminderDays, mutedUntil, user]);
 
   // Auto-reset checkboxes daily
   useEffect(() => {
@@ -129,50 +205,46 @@ export default function App() {
         }))
       );
       setLastResetDate(today);
-      localStorage.setItem('prayer-last-reset', today);
+      if (!user) localStorage.setItem('prayer-last-reset', today);
     }
-  }, [lastResetDate]);
-
-  // Save reminder settings
-  useEffect(() => {
-    localStorage.setItem('prayer-reminder-time', reminderTime);
-  }, [reminderTime]);
-
-  useEffect(() => {
-    localStorage.setItem('prayer-last-notified', lastNotifiedDate);
-  }, [lastNotifiedDate]);
-
-  useEffect(() => {
-    localStorage.setItem('prayer-vow', JSON.stringify(vow));
-  }, [vow]);
+  }, [lastResetDate, user]);
 
   // Notifications Logic
   useEffect(() => {
     if (!notificationsEnabled) return;
 
-    // Request permission if not granted
+    // Request permission if not granted, but don't disable if denied (we'll use in-app)
     if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-      Notification.requestPermission().then(permission => {
-        if (permission !== 'granted') {
-          setNotificationsEnabled(false);
-        }
-      });
+      Notification.requestPermission().catch(() => {});
     }
 
     const checkAndNotify = () => {
+      if (mutedUntil && Date.now() < mutedUntil) return; // Muted
+
       const now = new Date();
       const hours = String(now.getHours()).padStart(2, '0');
       const minutes = String(now.getMinutes()).padStart(2, '0');
       const currentTime = `${hours}:${minutes}`;
       const today = now.toDateString();
+      const currentDay = now.getDay();
 
       if (currentTime === reminderTime && lastNotifiedDate !== today) {
-        if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Tiempo de Orar', {
-            body: 'Perseverad en la oración, velando en ella con acción de gracias.',
-            icon: '/favicon.ico'
-          });
+        if (reminderFrequency === 'daily' || (reminderFrequency === 'weekly' && reminderDays.includes(currentDay))) {
+          // Trigger in-app reminder
+          setActiveReminder(true);
           setLastNotifiedDate(today);
+
+          // Try native notification if allowed
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('Tiempo de Orar', {
+                body: 'Perseverad en la oración, velando en ella con acción de gracias.',
+                icon: '/favicon.ico'
+              });
+            } catch (e) {
+              // Ignore native error
+            }
+          }
         }
       }
     };
@@ -183,42 +255,81 @@ export default function App() {
     // Then check every minute
     const interval = setInterval(checkAndNotify, 60000);
     return () => clearInterval(interval);
-  }, [notificationsEnabled, reminderTime, lastNotifiedDate]);
+  }, [notificationsEnabled, reminderTime, lastNotifiedDate, reminderFrequency, reminderDays, mutedUntil]);
 
   // --- Handlers ---
 
   const toggleNotifications = async () => {
     if (!notificationsEnabled) {
+      setNotificationsEnabled(true);
       if ('Notification' in window) {
         try {
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
-            setNotificationsEnabled(true);
-            new Notification('¡Recordatorios activados!', {
-              body: `Te recordaremos orar todos los días a las ${reminderTime}.`
-            });
+            showToast(`Recordatorios activados para las ${reminderTime}.`);
           } else {
-            showToast('Debes permitir las notificaciones en tu navegador.');
+            showToast('Notificaciones nativas bloqueadas. Usaremos recordatorios dentro de la app.');
           }
         } catch (e) {
-          showToast('Error al solicitar permisos.');
+          showToast('Usaremos recordatorios dentro de la app.');
         }
       } else {
-        showToast('Tu navegador no soporta notificaciones web.');
+        showToast('Navegador no soporta notificaciones web. Usaremos recordatorios en la app.');
       }
     } else {
       setNotificationsEnabled(false);
+      showToast('Recordatorios desactivados.');
     }
   };
 
   const saveSettings = () => {
     setIsSettingsOpen(false);
-    if (notificationsEnabled && 'Notification' in window && Notification.permission === 'granted') {
-      new Notification('Recordatorio configurado', {
-        body: `Recibirás una notificación diaria a las ${reminderTime}.`
-      });
-    }
     showToast('Configuración guardada');
+  };
+
+  const muteForHours = (hours: number) => {
+    setMutedUntil(Date.now() + hours * 60 * 60 * 1000);
+    showToast(`Notificaciones silenciadas por ${hours} hora${hours > 1 ? 's' : ''}`);
+  };
+
+  const muteUntilTomorrow = () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    setMutedUntil(tomorrow.getTime());
+    showToast('Notificaciones silenciadas hasta mañana');
+  };
+
+  const unmute = () => {
+    setMutedUntil(null);
+    showToast('Notificaciones reactivadas');
+  };
+
+  const loginWithGoogle = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider);
+      showToast('Sesión iniciada con Google');
+    } catch (error) {
+      showToast('Error al iniciar sesión con Google');
+    }
+  };
+
+  const loginWithOutlook = async () => {
+    try {
+      await signInWithPopup(auth, outlookProvider);
+      showToast('Sesión iniciada con Outlook');
+    } catch (error) {
+      showToast('Error al iniciar sesión con Outlook');
+    }
+  };
+
+  const logout = async () => {
+    try {
+      await signOut(auth);
+      showToast('Sesión cerrada');
+    } catch (error) {
+      showToast('Error al cerrar sesión');
+    }
   };
 
   const addTopic = (e: React.FormEvent) => {
@@ -228,11 +339,13 @@ export default function App() {
     const newTopic: Topic = {
       id: Date.now().toString(),
       title: newTopicTitle.trim(),
+      icon: newTopicIcon,
       items: []
     };
     
     setTopics([...topics, newTopic]);
     setNewTopicTitle('');
+    setNewTopicIcon('Folder');
   };
 
   const deleteTopic = (topicId: string) => {
@@ -256,7 +369,12 @@ export default function App() {
       if (topic.id === topicId) {
         return {
           ...topic,
-          items: [...topic.items, { id: Date.now().toString(), text: text.trim(), checked: false }]
+          items: [...topic.items, { 
+            id: Date.now().toString(), 
+            text: text.trim(), 
+            checked: false,
+            startDate: new Date().toISOString().split('T')[0]
+          }]
         };
       }
       return topic;
@@ -363,6 +481,44 @@ export default function App() {
     showToast('Voto cancelado');
   };
 
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">Diario de Oración</h1>
+          <p className="text-slate-600 mb-8">Debes iniciar sesión para que tus datos, configuraciones e historial queden guardados de forma segura.</p>
+          
+          <div className="space-y-3">
+            <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 transition-colors shadow-sm">
+              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+              Continuar con Google
+            </button>
+            <button onClick={loginWithOutlook} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 transition-colors shadow-sm">
+              <img src="https://www.microsoft.com/favicon.ico" className="w-5 h-5" alt="Outlook" />
+              Continuar con Outlook / Hotmail
+            </button>
+          </div>
+        </div>
+        {toast && (
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium z-50">
+            {toast}
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-100">
       {/* Header / Hero Section */}
@@ -375,6 +531,19 @@ export default function App() {
             <h1 className="text-xl font-semibold text-slate-900">Diario de Oración</h1>
           </div>
           <div className="flex items-center space-x-2">
+            <div className="flex items-center gap-3">
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-xs font-medium text-slate-900">{user.displayName}</span>
+                <button onClick={logout} className="text-[10px] text-red-500 hover:underline">Cerrar sesión</button>
+              </div>
+              {user.photoURL ? (
+                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200" referrerPolicy="no-referrer" />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                  <User className="w-4 h-4" />
+                </div>
+              )}
+            </div>
             <button
               onClick={toggleNotifications}
               className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
@@ -481,7 +650,14 @@ export default function App() {
           {topics.map(topic => (
             <div key={topic.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
               <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
-                <h3 className="font-semibold text-lg sm:text-xl text-slate-800">{topic.title}</h3>
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 text-blue-500">
+                    {topic.icon && AVAILABLE_ICONS[topic.icon] 
+                      ? React.createElement(AVAILABLE_ICONS[topic.icon], { className: "w-5 h-5" }) 
+                      : <Folder className="w-5 h-5" />}
+                  </div>
+                  <h3 className="font-semibold text-lg sm:text-xl text-slate-800">{topic.title}</h3>
+                </div>
                 <button 
                   onClick={() => deleteTopic(topic.id)}
                   className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-white hover:bg-red-50 rounded-md shadow-sm border border-slate-200"
@@ -544,9 +720,17 @@ export default function App() {
                                 <Circle className="w-6 h-6" />
                               )}
                             </button>
-                            <span className={`ml-3 text-base flex-1 transition-all ${item.checked ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
-                              {item.text}
-                            </span>
+                            <div className="ml-3 flex-1 flex flex-col justify-center">
+                              <span className={`text-base transition-all ${item.checked ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                                {item.text}
+                              </span>
+                              {item.startDate && (
+                                <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                  <Calendar className="w-3 h-3" />
+                                  Desde: {new Date(item.startDate + 'T12:00:00').toLocaleDateString()}
+                                </span>
+                              )}
+                            </div>
                             <div className="flex items-center ml-2 space-x-1">
                               <button
                                 onClick={() => startEditing(item)}
@@ -597,21 +781,39 @@ export default function App() {
             </div>
             <h3 className="font-medium text-slate-800 mb-2">Crear nuevo tema</h3>
             <p className="text-sm text-slate-500 mb-4">Añade una nueva categoría para organizar tus oraciones.</p>
-            <form onSubmit={addTopic} className="w-full max-w-xs relative">
-              <input
-                type="text"
-                value={newTopicTitle}
-                onChange={(e) => setNewTopicTitle(e.target.value)}
-                placeholder="Ej. Trabajo, Viajes..."
-                className="w-full bg-white border border-slate-200 rounded-lg pl-4 pr-12 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
-              />
-              <button
-                type="submit"
-                disabled={!newTopicTitle.trim()}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 disabled:text-slate-300 hover:text-blue-700 transition-colors bg-slate-50 rounded-md disabled:bg-transparent"
-              >
-                <Plus className="w-5 h-5" />
-              </button>
+            <form onSubmit={addTopic} className="w-full max-w-xs flex flex-col gap-4">
+              <div className="flex gap-2 overflow-x-auto pb-2 justify-start sm:justify-center px-1 scrollbar-thin scrollbar-thumb-slate-200">
+                {Object.keys(AVAILABLE_ICONS).map(iconName => {
+                  const IconComponent = AVAILABLE_ICONS[iconName];
+                  return (
+                    <button
+                      key={iconName}
+                      type="button"
+                      onClick={() => setNewTopicIcon(iconName)}
+                      className={`p-2 rounded-xl flex-shrink-0 transition-colors ${newTopicIcon === iconName ? 'bg-blue-100 text-blue-600 shadow-sm border border-blue-200' : 'text-slate-400 hover:bg-slate-200 border border-transparent'}`}
+                      title={iconName}
+                    >
+                      <IconComponent className="w-5 h-5" />
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="relative">
+                <input
+                  type="text"
+                  value={newTopicTitle}
+                  onChange={(e) => setNewTopicTitle(e.target.value)}
+                  placeholder="Ej. Trabajo, Viajes..."
+                  className="w-full bg-white border border-slate-200 rounded-lg pl-4 pr-12 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                />
+                <button
+                  type="submit"
+                  disabled={!newTopicTitle.trim()}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 disabled:text-slate-300 hover:text-blue-700 transition-colors bg-slate-50 rounded-md disabled:bg-transparent"
+                >
+                  <Plus className="w-5 h-5" />
+                </button>
+              </div>
             </form>
           </div>
         </div>
@@ -620,8 +822,8 @@ export default function App() {
       {/* Settings Modal */}
       {isSettingsOpen && (
         <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
               <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
                 <Settings className="w-5 h-5 text-slate-500" />
                 Configuración
@@ -630,11 +832,11 @@ export default function App() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 overflow-y-auto">
               <div>
                 <h3 className="text-sm font-medium text-slate-900 mb-3">Notificaciones</h3>
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-slate-600">Activar recordatorios diarios</span>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm text-slate-600">Activar recordatorios</span>
                   <button
                     onClick={toggleNotifications}
                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationsEnabled ? 'bg-blue-600' : 'bg-slate-200'}`}
@@ -642,24 +844,89 @@ export default function App() {
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
+                <p className="text-xs text-slate-500 mb-4">
+                  Si tu navegador no soporta notificaciones web, te mostraremos un recordatorio dentro de la aplicación cuando la tengas abierta.
+                </p>
               </div>
               
               {notificationsEnabled && (
-                <div>
-                  <h3 className="text-sm font-medium text-slate-900 mb-3">Hora del recordatorio</h3>
-                  <input
-                    type="time"
-                    value={reminderTime}
-                    onChange={(e) => setReminderTime(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                  <p className="text-xs text-slate-500 mt-2">
-                    Recibirás una notificación a esta hora todos los días (requiere mantener la aplicación abierta o en segundo plano).
-                  </p>
-                </div>
+                <>
+                  <div className="space-y-4">
+                    <div>
+                      <h3 className="text-sm font-medium text-slate-900 mb-2">Frecuencia</h3>
+                      <div className="flex gap-3">
+                        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                          <input type="radio" name="frequency" value="daily" checked={reminderFrequency === 'daily'} onChange={() => setReminderFrequency('daily')} className="text-blue-600 focus:ring-blue-500" />
+                          Diaria
+                        </label>
+                        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
+                          <input type="radio" name="frequency" value="weekly" checked={reminderFrequency === 'weekly'} onChange={() => setReminderFrequency('weekly')} className="text-blue-600 focus:ring-blue-500" />
+                          Semanal
+                        </label>
+                      </div>
+                    </div>
+
+                    {reminderFrequency === 'weekly' && (
+                      <div>
+                        <h3 className="text-sm font-medium text-slate-900 mb-2">Días de la semana</h3>
+                        <div className="flex gap-2">
+                          {[{id: 1, l: 'L'}, {id: 2, l: 'M'}, {id: 3, l: 'X'}, {id: 4, l: 'J'}, {id: 5, l: 'V'}, {id: 6, l: 'S'}, {id: 0, l: 'D'}].map(day => (
+                            <button
+                              key={day.id}
+                              onClick={() => {
+                                if (reminderDays.includes(day.id)) {
+                                  setReminderDays(reminderDays.filter(d => d !== day.id));
+                                } else {
+                                  setReminderDays([...reminderDays, day.id]);
+                                }
+                              }}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${reminderDays.includes(day.id) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                            >
+                              {day.l}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <h3 className="text-sm font-medium text-slate-900 mb-2">Hora del recordatorio</h3>
+                      <input
+                        type="time"
+                        value={reminderTime}
+                        onChange={(e) => setReminderTime(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100">
+                    <h3 className="text-sm font-medium text-slate-900 mb-3 flex items-center gap-2">
+                      <BellOff className="w-4 h-4 text-slate-500" />
+                      Silenciar notificaciones
+                    </h3>
+                    
+                    {mutedUntil && mutedUntil > Date.now() ? (
+                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between">
+                        <span className="text-sm text-amber-800">
+                          Silenciadas hasta: {new Date(mutedUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                        </span>
+                        <button onClick={unmute} className="text-sm font-medium text-amber-900 hover:text-amber-700 bg-amber-100 px-3 py-1 rounded-md transition-colors">
+                          Reactivar
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => muteForHours(1)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors">1 hora</button>
+                        <button onClick={() => muteForHours(4)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors">4 horas</button>
+                        <button onClick={muteUntilTomorrow} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors">Hasta mañana</button>
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </div>
-            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end">
+            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
               <button
                 onClick={saveSettings}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -690,6 +957,28 @@ export default function App() {
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-5 py-3 rounded-full shadow-lg z-50 text-sm flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4">
           <AlertCircle className="w-4 h-4 text-blue-400" />
           {toast}
+        </div>
+      )}
+
+      {/* In-App Reminder Modal */}
+      {activeReminder && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-8 text-center relative animate-in fade-in zoom-in duration-300">
+            <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
+            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+              <Bell className="w-10 h-10 animate-bounce" />
+            </div>
+            <h3 className="text-2xl font-bold text-slate-900 mb-3">¡Tiempo de Orar!</h3>
+            <p className="text-slate-600 mb-8 text-base">
+              "Perseverad en la oración, velando en ella con acción de gracias."
+            </p>
+            <button 
+              onClick={() => setActiveReminder(false)} 
+              className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl text-base font-medium hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+            >
+              Comenzar a orar
+            </button>
+          </div>
         </div>
       )}
     </div>
