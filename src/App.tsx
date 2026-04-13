@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder, Share2, Moon } from 'lucide-react';
+import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder, Share2, Moon, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { Reorder } from 'motion/react';
 import { auth, db, googleProvider, outlookProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -81,6 +81,7 @@ export default function App() {
   const [lastResetDate, setLastResetDate] = useState<string>(new Date().toDateString());
   const [notificationsEnabled, setNotificationsEnabled] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [focusMode, setFocusMode] = useState<{ active: boolean; currentIndex: number; timer: number; isRunning: boolean }>({ active: false, currentIndex: 0, timer: 0, isRunning: false });
   const [reminderTime, setReminderTime] = useState<string>('08:00');
   const [lastNotifiedDate, setLastNotifiedDate] = useState<string>('');
   const [reminderFrequency, setReminderFrequency] = useState<Frequency>('daily');
@@ -312,8 +313,64 @@ export default function App() {
     return () => clearInterval(interval);
   }, [notificationsEnabled, reminderTime, lastNotifiedDate, reminderFrequency, reminderDays, mutedUntil]);
 
+  // Focus Mode Timer
+  useEffect(() => {
+    let interval: any;
+    if (focusMode.active && focusMode.isRunning) {
+      interval = setInterval(() => {
+        setFocusMode(prev => ({ ...prev, timer: prev.timer + 1 }));
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [focusMode.active, focusMode.isRunning]);
+
   // --- Handlers ---
 
+  const startFocusMode = () => {
+    const allItems = topics.flatMap(t => t.items.map(i => ({ ...i, topicTitle: t.title })));
+    if (allItems.length === 0) {
+      showToast("Agrega algunos motivos de oración primero");
+      return;
+    }
+    setFocusMode({ active: true, currentIndex: 0, timer: 0, isRunning: true });
+  };
+
+  const nextFocusItem = () => {
+    const allItems = topics.flatMap(t => t.items);
+    setFocusMode(prev => ({
+      ...prev,
+      currentIndex: (prev.currentIndex + 1) % allItems.length
+    }));
+  };
+
+  const prevFocusItem = () => {
+    const allItems = topics.flatMap(t => t.items);
+    setFocusMode(prev => ({
+      ...prev,
+      currentIndex: (prev.currentIndex - 1 + allItems.length) % allItems.length
+    }));
+  };
+
+  const toggleFocusTimer = () => {
+    setFocusMode(prev => ({ ...prev, isRunning: !prev.isRunning }));
+  };
+
+  const exitFocusMode = () => {
+    setFocusMode({ active: false, currentIndex: 0, timer: 0, isRunning: false });
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const toggleItemInFocus = (itemId: string) => {
+    setTopics(prev => prev.map(t => ({
+      ...t,
+      items: t.items.map(i => i.id === itemId ? { ...i, checked: !i.checked } : i)
+    })));
+  };
   const toggleNotifications = async () => {
     if (!notificationsEnabled) {
       setNotificationsEnabled(true);
@@ -670,6 +727,14 @@ export default function App() {
                 </div>
               )}
             </div>
+            <button
+              onClick={startFocusMode}
+              className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+              title="Modo Enfoque"
+            >
+              <Target className="w-4 h-4" />
+              <span>Enfoque</span>
+            </button>
             <button
               onClick={() => setDarkMode(!darkMode)}
               className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
@@ -1142,6 +1207,79 @@ export default function App() {
             >
               Comenzar a orar
             </button>
+          </div>
+        </div>
+      )}
+      {/* Focus Mode Overlay */}
+      {focusMode.active && (
+        <div className="fixed inset-0 bg-white dark:bg-slate-900 z-[100] flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
+          <div className="absolute top-8 right-8 flex items-center gap-4">
+            <div className="text-2xl font-mono font-bold text-slate-400 dark:text-slate-500">
+              {formatTime(focusMode.timer)}
+            </div>
+            <button 
+              onClick={exitFocusMode}
+              className="p-2 text-slate-400 hover:text-red-500 transition-colors"
+              title="Salir del modo enfoque"
+            >
+              <X className="w-8 h-8" />
+            </button>
+          </div>
+
+          <div className="max-w-2xl w-full text-center space-y-12">
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-bold uppercase tracking-widest">
+                {topics.flatMap(t => t.items.map(i => ({ ...i, topicTitle: t.title })))[focusMode.currentIndex]?.topicTitle}
+              </div>
+              <h2 className="text-4xl sm:text-6xl font-bold text-slate-900 dark:text-white leading-tight">
+                {topics.flatMap(t => t.items)[focusMode.currentIndex]?.text}
+              </h2>
+            </div>
+
+            <div className="flex items-center justify-center gap-8">
+              <button 
+                onClick={prevFocusItem}
+                className="p-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                <ChevronLeft className="w-12 h-12" />
+              </button>
+              
+              <button 
+                onClick={toggleFocusTimer}
+                className={`w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-xl ${
+                  focusMode.isRunning 
+                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' 
+                    : 'bg-blue-600 dark:bg-blue-500 text-white'
+                }`}
+              >
+                {focusMode.isRunning ? <Pause className="w-10 h-10" /> : <Play className="w-10 h-10 ml-1" />}
+              </button>
+
+              <button 
+                onClick={nextFocusItem}
+                className="p-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+              >
+                <ChevronRight className="w-12 h-12" />
+              </button>
+            </div>
+
+            <div className="flex flex-col items-center gap-6">
+              <button 
+                onClick={() => toggleItemInFocus(topics.flatMap(t => t.items)[focusMode.currentIndex]?.id)}
+                className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-xl transition-all ${
+                  topics.flatMap(t => t.items)[focusMode.currentIndex]?.checked
+                    ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {topics.flatMap(t => t.items)[focusMode.currentIndex]?.checked ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
+                {topics.flatMap(t => t.items)[focusMode.currentIndex]?.checked ? 'Orado' : 'Marcar como orado'}
+              </button>
+              
+              <div className="text-slate-400 dark:text-slate-500 font-medium">
+                Motivo {focusMode.currentIndex + 1} de {topics.flatMap(t => t.items).length}
+              </div>
+            </div>
           </div>
         </div>
       )}
