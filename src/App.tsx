@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder, Share2 } from 'lucide-react';
+import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder, Share2, Moon } from 'lucide-react';
 import { Reorder } from 'motion/react';
 import { auth, db, googleProvider, outlookProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -86,6 +86,7 @@ export default function App() {
   const [reminderFrequency, setReminderFrequency] = useState<Frequency>('daily');
   const [reminderDays, setReminderDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
   const [mutedUntil, setMutedUntil] = useState<number | null>(null);
+  const [darkMode, setDarkMode] = useState<boolean>(false);
   const [vow, setVow] = useState<PrayerVow>({ active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null });
   const [vowForm, setVowForm] = useState({ totalDays: 7, minutesPerDay: 15, motives: '' });
   
@@ -125,6 +126,8 @@ export default function App() {
         if (savedTopics) setTopics(JSON.parse(savedTopics));
         const savedSettings = localStorage.getItem('prayer-notifications');
         if (savedSettings) setNotificationsEnabled(savedSettings === 'true');
+        const savedDarkMode = localStorage.getItem('prayer-dark-mode');
+        if (savedDarkMode) setDarkMode(savedDarkMode === 'true');
         const savedVow = localStorage.getItem('prayer-vow');
         if (savedVow) setVow(JSON.parse(savedVow));
       }
@@ -160,6 +163,7 @@ export default function App() {
         setReminderFrequency(settings.reminderFrequency || 'daily');
         setReminderDays(settings.reminderDays || [0, 1, 2, 3, 4, 5, 6]);
         setMutedUntil(settings.mutedUntil || null);
+        setDarkMode(settings.darkMode || false);
       } else {
         // Initialize user doc if it doesn't exist
         saveToFirestore();
@@ -182,7 +186,8 @@ export default function App() {
           reminderTime,
           reminderFrequency,
           reminderDays,
-          mutedUntil
+          mutedUntil,
+          darkMode
         }
       });
     } catch (error) {
@@ -199,12 +204,22 @@ export default function App() {
       localStorage.setItem('prayer-reminder-time', reminderTime);
       localStorage.setItem('prayer-reminder-freq', reminderFrequency);
       localStorage.setItem('prayer-reminder-days', JSON.stringify(reminderDays));
+      localStorage.setItem('prayer-dark-mode', String(darkMode));
       if (mutedUntil) localStorage.setItem('prayer-muted-until', mutedUntil.toString());
       else localStorage.removeItem('prayer-muted-until');
     } else {
       saveToFirestore();
     }
-  }, [topics, notificationsEnabled, vow, reminderTime, reminderFrequency, reminderDays, mutedUntil, user]);
+  }, [topics, notificationsEnabled, vow, reminderTime, reminderFrequency, reminderDays, mutedUntil, darkMode, user]);
+
+  // Apply dark mode class to html
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [darkMode]);
 
   // Auto-reset checkboxes daily
   useEffect(() => {
@@ -569,35 +584,35 @@ export default function App() {
 
   if (isAuthLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 dark:border-blue-400"></div>
       </div>
     );
   }
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 font-sans">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-xl p-8 text-center">
-          <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 flex flex-col items-center justify-center p-4 font-sans">
+        <div className="max-w-md w-full bg-white dark:bg-slate-800 rounded-2xl shadow-xl p-8 text-center">
+          <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6">
             <BookOpen className="w-8 h-8" />
           </div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">Diario de Oración</h1>
-          <p className="text-slate-600 mb-8">Debes iniciar sesión para que tus datos, configuraciones e historial queden guardados de forma segura.</p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">Diario de Oración</h1>
+          <p className="text-slate-600 dark:text-slate-300 mb-8">Debes iniciar sesión para que tus datos, configuraciones e historial queden guardados de forma segura.</p>
           
           <div className="space-y-3">
-            <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 transition-colors shadow-sm">
+            <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm">
               <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
               Continuar con Google
             </button>
-            <button onClick={loginWithOutlook} className="w-full flex items-center justify-center gap-3 bg-white border border-slate-200 text-slate-700 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 transition-colors shadow-sm">
+            <button onClick={loginWithOutlook} className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm">
               <img src="https://www.microsoft.com/favicon.ico" className="w-5 h-5" alt="Outlook" />
               Continuar con Outlook / Hotmail
             </button>
           </div>
         </div>
         {toast && (
-          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium z-50">
+          <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white px-6 py-3 rounded-full shadow-lg text-sm font-medium z-50">
             {toast}
           </div>
         )}
@@ -606,15 +621,15 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 font-sans selection:bg-blue-100">
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200 font-sans selection:bg-blue-100 dark:selection:bg-blue-900/50">
       {/* Header / Hero Section */}
-      <header className="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-10">
+      <header className="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-4 py-4 sm:px-6 lg:px-8 flex justify-between items-center">
           <div className="flex items-center space-x-3">
-            <div className="bg-blue-50 p-2 rounded-lg text-blue-600">
+            <div className="bg-blue-50 dark:bg-blue-900/50 p-2 rounded-lg text-blue-600 dark:text-blue-400">
               <BookOpen className="w-6 h-6" />
             </div>
-            <h1 className="text-xl font-semibold text-slate-900">Diario de Oración</h1>
+            <h1 className="text-xl font-semibold text-slate-900 dark:text-white">Diario de Oración</h1>
           </div>
           <div className="flex items-center space-x-2">
             {deferredPrompt && (
@@ -628,33 +643,40 @@ export default function App() {
             )}
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex flex-col items-end">
-                <span className="text-xs font-medium text-slate-900">{user.displayName}</span>
+                <span className="text-xs font-medium text-slate-900 dark:text-slate-200">{user.displayName}</span>
                 <button onClick={logout} className="text-[10px] text-red-500 hover:underline">Cerrar sesión</button>
               </div>
               {user.photoURL ? (
-                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200" referrerPolicy="no-referrer" />
+                <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-600" referrerPolicy="no-referrer" />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
                   <User className="w-4 h-4" />
                 </div>
               )}
             </div>
             <button
+              onClick={() => setDarkMode(!darkMode)}
+              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
+              title={darkMode ? "Modo Claro" : "Modo Oscuro"}
+            >
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            <button
               onClick={toggleNotifications}
               className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
                 notificationsEnabled 
-                  ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' 
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50' 
+                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
               }`}
             >
-              <Bell className={`w-4 h-4 ${notificationsEnabled ? 'fill-blue-600' : ''}`} />
+              <Bell className={`w-4 h-4 ${notificationsEnabled ? 'fill-blue-600 dark:fill-blue-400' : ''}`} />
               <span className="hidden sm:inline">
                 {notificationsEnabled ? 'Recordatorios Activos' : 'Activar Recordatorios'}
               </span>
             </button>
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors"
+              className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
               title="Configuración"
             >
               <Settings className="w-5 h-5" />
@@ -683,46 +705,46 @@ export default function App() {
         </section>
 
         {/* Voto de Oración Section */}
-        <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 sm:p-8">
+        <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-slate-800 flex items-center gap-2">
-              <Target className="w-6 h-6 text-blue-600" />
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+              <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
               Voto de Oración
             </h2>
           </div>
           {!vow.active ? (
             <form onSubmit={startVow} className="space-y-4">
-              <p className="text-sm text-slate-600 mb-4">Consagra un tiempo específico diario para orar por motivos especiales.</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">Consagra un tiempo específico diario para orar por motivos especiales.</p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Días consagrados</label>
-                  <input type="number" min="1" value={vowForm.totalDays} onChange={e => setVowForm({...vowForm, totalDays: parseInt(e.target.value)})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" required />
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Días consagrados</label>
+                  <input type="number" min="1" value={vowForm.totalDays} onChange={e => setVowForm({...vowForm, totalDays: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Minutos por día</label>
-                  <input type="number" min="1" value={vowForm.minutesPerDay} onChange={e => setVowForm({...vowForm, minutesPerDay: parseInt(e.target.value)})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" required />
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Minutos por día</label>
+                  <input type="number" min="1" value={vowForm.minutesPerDay} onChange={e => setVowForm({...vowForm, minutesPerDay: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" required />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">Motivos específicos</label>
-                <textarea value={vowForm.motives} onChange={e => setVowForm({...vowForm, motives: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none" rows={2} required placeholder="Ej. Por la salvación de mi familia, por dirección..."></textarea>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Motivos específicos</label>
+                <textarea value={vowForm.motives} onChange={e => setVowForm({...vowForm, motives: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" rows={2} required placeholder="Ej. Por la salvación de mi familia, por dirección..."></textarea>
               </div>
               <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">Iniciar Voto</button>
             </form>
           ) : (
             <div className="space-y-5">
               <div className="flex flex-wrap gap-3 text-sm font-medium">
-                <div className="flex items-center gap-1.5 bg-blue-50 text-blue-700 px-4 py-1.5 rounded-full"><Calendar className="w-4 h-4"/> Día {vow.daysCompleted} de {vow.totalDays}</div>
-                <div className="flex items-center gap-1.5 bg-indigo-50 text-indigo-700 px-4 py-1.5 rounded-full"><Clock className="w-4 h-4"/> {vow.minutesPerDay} min/día</div>
+                <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-1.5 rounded-full"><Calendar className="w-4 h-4"/> Día {vow.daysCompleted} de {vow.totalDays}</div>
+                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-4 py-1.5 rounded-full"><Clock className="w-4 h-4"/> {vow.minutesPerDay} min/día</div>
               </div>
               
               {/* Progress bar */}
-              <div className="w-full bg-slate-100 rounded-full h-2.5">
-                <div className="bg-blue-600 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(vow.daysCompleted / vow.totalDays) * 100}%` }}></div>
+              <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5">
+                <div className="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(vow.daysCompleted / vow.totalDays) * 100}%` }}></div>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-xl text-sm text-slate-700 border border-slate-100">
-                <strong className="block mb-1 text-slate-900">Motivos consagrados:</strong> 
+              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl text-sm text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-700">
+                <strong className="block mb-1 text-slate-900 dark:text-white">Motivos consagrados:</strong> 
                 {vow.motives}
               </div>
               <div className="flex flex-wrap gap-3">
@@ -734,7 +756,7 @@ export default function App() {
                   <CheckCircle2 className="w-5 h-5" />
                   {vow.lastCompletedDate === new Date().toDateString() ? 'Día completado' : 'Marcar día completado'}
                 </button>
-                <button onClick={() => setConfirmDialog({isOpen: true, title: 'Cancelar Voto', message: '¿Estás seguro de cancelar tu voto de oración actual? Perderás el progreso.', onConfirm: cancelVow})} className="px-6 py-2.5 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-50 transition-colors">Cancelar Voto</button>
+                <button onClick={() => setConfirmDialog({isOpen: true, title: 'Cancelar Voto', message: '¿Estás seguro de cancelar tu voto de oración actual? Perderás el progreso.', onConfirm: cancelVow})} className="px-6 py-2.5 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Cancelar Voto</button>
               </div>
             </div>
           )}
@@ -743,27 +765,27 @@ export default function App() {
         {/* Topics Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {topics.map(topic => (
-            <div key={topic.id} className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col">
-              <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
+            <div key={topic.id} className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 overflow-hidden flex flex-col">
+              <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 flex justify-between items-center">
                 <div className="flex items-center gap-3">
-                  <div className="p-2 bg-white rounded-lg shadow-sm border border-slate-200 text-blue-500">
+                  <div className="p-2 bg-white dark:bg-slate-700 rounded-lg shadow-sm border border-slate-200 dark:border-slate-600 text-blue-500 dark:text-blue-400">
                     {topic.icon && AVAILABLE_ICONS[topic.icon] 
                       ? React.createElement(AVAILABLE_ICONS[topic.icon], { className: "w-5 h-5" }) 
                       : <Folder className="w-5 h-5" />}
                   </div>
-                  <h3 className="font-semibold text-lg sm:text-xl text-slate-800">{topic.title}</h3>
+                  <h3 className="font-semibold text-lg sm:text-xl text-slate-800 dark:text-white">{topic.title}</h3>
                 </div>
                 <div className="flex items-center gap-2">
                   <button 
                     onClick={() => shareTopic(topic)}
-                    className="p-2 text-slate-400 hover:text-blue-600 transition-colors bg-white hover:bg-blue-50 rounded-md shadow-sm border border-slate-200"
+                    className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-white dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 rounded-md shadow-sm border border-slate-200 dark:border-slate-600"
                     title="Compartir tema"
                   >
                     <Share2 className="w-4 h-4" />
                   </button>
                   <button 
                     onClick={() => deleteTopic(topic.id)}
-                    className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-white hover:bg-red-50 rounded-md shadow-sm border border-slate-200"
+                    className="p-2 text-slate-400 hover:text-red-500 dark:hover:text-red-400 transition-colors bg-white dark:bg-slate-700 hover:bg-red-50 dark:hover:bg-slate-600 rounded-md shadow-sm border border-slate-200 dark:border-slate-600"
                     title="Eliminar tema"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -773,7 +795,7 @@ export default function App() {
               
               <div className="p-5 flex-1 flex flex-col">
                 {topic.items.length === 0 ? (
-                  <div className="text-sm text-slate-400 italic text-center py-4 mb-4">
+                  <div className="text-sm text-slate-400 dark:text-slate-500 italic text-center py-4 mb-4">
                     No hay motivos en este tema aún.
                   </div>
                 ) : (
@@ -787,7 +809,7 @@ export default function App() {
                       <Reorder.Item
                         key={item.id}
                         value={item}
-                        className="flex items-center group min-h-[44px] py-1 border-b border-slate-50 last:border-0 bg-white"
+                        className="flex items-center group min-h-[44px] py-1 border-b border-slate-50 dark:border-slate-700/50 last:border-0 bg-white dark:bg-slate-800"
                       >
                         {editingItemId === item.id ? (
                           <div className="flex-1 flex items-center gap-2 w-full">
@@ -799,37 +821,37 @@ export default function App() {
                                 if (e.key === 'Enter') saveEdit(topic.id);
                                 if (e.key === 'Escape') cancelEdit();
                               }}
-                              className="flex-1 bg-white border border-blue-300 rounded px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              className="flex-1 bg-white dark:bg-slate-900 border border-blue-300 dark:border-blue-700 rounded px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white"
                               autoFocus
                             />
-                            <button onClick={() => saveEdit(topic.id)} className="text-green-600 hover:text-green-700 p-2 bg-green-50 rounded-md">
+                            <button onClick={() => saveEdit(topic.id)} className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 p-2 bg-green-50 dark:bg-green-900/30 rounded-md">
                               <Check className="w-5 h-5" />
                             </button>
-                            <button onClick={cancelEdit} className="text-slate-500 hover:text-slate-700 p-2 bg-slate-100 rounded-md">
+                            <button onClick={cancelEdit} className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-2 bg-slate-100 dark:bg-slate-700 rounded-md">
                               <X className="w-5 h-5" />
                             </button>
                           </div>
                         ) : (
                           <>
-                            <div className="cursor-grab active:cursor-grabbing p-1 text-slate-300 hover:text-slate-400 mr-1">
+                            <div className="cursor-grab active:cursor-grabbing p-1 text-slate-300 dark:text-slate-600 hover:text-slate-400 dark:hover:text-slate-500 mr-1">
                               <GripVertical className="w-4 h-4" />
                             </div>
                             <button
                               onClick={() => toggleItemCheck(topic.id, item.id)}
-                              className="flex-shrink-0 p-1 text-slate-400 hover:text-blue-600 focus:outline-none transition-colors"
+                              className="flex-shrink-0 p-1 text-slate-400 dark:text-slate-500 hover:text-blue-600 dark:hover:text-blue-400 focus:outline-none transition-colors"
                             >
                               {item.checked ? (
-                                <CheckCircle2 className="w-6 h-6 text-green-500" />
+                                <CheckCircle2 className="w-6 h-6 text-green-500 dark:text-green-400" />
                               ) : (
                                 <Circle className="w-6 h-6" />
                               )}
                             </button>
                             <div className="ml-3 flex-1 flex flex-col justify-center">
-                              <span className={`text-base transition-all ${item.checked ? 'text-slate-400 line-through' : 'text-slate-700'}`}>
+                              <span className={`text-base transition-all ${item.checked ? 'text-slate-400 dark:text-slate-500 line-through' : 'text-slate-700 dark:text-slate-200'}`}>
                                 {item.text}
                               </span>
                               {item.startDate && (
-                                <span className="text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                                <span className="text-[10px] text-slate-400 dark:text-slate-500 flex items-center gap-1 mt-0.5">
                                   <Calendar className="w-3 h-3" />
                                   Desde: {new Date(item.startDate + 'T12:00:00').toLocaleDateString()}
                                 </span>
@@ -838,21 +860,21 @@ export default function App() {
                             <div className="flex items-center ml-2 space-x-1">
                               <button
                                 onClick={() => shareItem(topic.title, item)}
-                                className="p-2 text-slate-400 hover:text-blue-600 transition-colors bg-slate-50 hover:bg-blue-50 rounded-md"
+                                className="p-2 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors bg-slate-50 dark:bg-slate-700 hover:bg-blue-50 dark:hover:bg-slate-600 rounded-md"
                                 title="Compartir motivo"
                               >
                                 <Share2 className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => startEditing(item)}
-                                className="p-2 text-blue-500 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 rounded-md"
+                                className="p-2 text-blue-500 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md"
                                 title="Editar"
                               >
                                 <Pencil className="w-4 h-4" />
                               </button>
                               <button
                                 onClick={() => deleteItem(topic.id, item.id)}
-                                className="p-2 text-red-500 hover:text-red-700 transition-colors bg-red-50 hover:bg-red-100 rounded-md"
+                                className="p-2 text-red-500 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors bg-red-50 dark:bg-red-900/30 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md"
                                 title="Eliminar"
                               >
                                 <X className="w-4 h-4" />
@@ -871,12 +893,12 @@ export default function App() {
                     value={newItemTexts[topic.id] || ''}
                     onChange={(e) => setNewItemTexts({ ...newItemTexts, [topic.id]: e.target.value })}
                     placeholder="Añadir motivo o nombre..."
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-4 pr-12 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                    className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-4 pr-12 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all dark:text-white"
                   />
                   <button
                     type="submit"
                     disabled={!newItemTexts[topic.id]?.trim()}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 disabled:text-slate-300 hover:text-blue-700 transition-colors bg-white rounded-md shadow-sm border border-slate-100 disabled:bg-transparent disabled:border-transparent disabled:shadow-none"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 dark:text-blue-400 disabled:text-slate-300 dark:disabled:text-slate-600 hover:text-blue-700 dark:hover:text-blue-300 transition-colors bg-white dark:bg-slate-800 rounded-md shadow-sm border border-slate-100 dark:border-slate-700 disabled:bg-transparent disabled:border-transparent disabled:shadow-none"
                   >
                     <Plus className="w-5 h-5" />
                   </button>
@@ -886,14 +908,14 @@ export default function App() {
           ))}
 
           {/* Add New Topic Card */}
-          <div className="bg-slate-50 rounded-2xl border-2 border-dashed border-slate-200 p-6 flex flex-col items-center justify-center text-center min-h-[250px]">
-            <div className="w-12 h-12 bg-white rounded-full shadow-sm flex items-center justify-center text-blue-600 mb-4">
+          <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 p-6 flex flex-col items-center justify-center text-center min-h-[250px]">
+            <div className="w-12 h-12 bg-white dark:bg-slate-800 rounded-full shadow-sm flex items-center justify-center text-blue-600 dark:text-blue-400 mb-4">
               <Plus className="w-6 h-6" />
             </div>
-            <h3 className="font-medium text-slate-800 mb-2">Crear nuevo tema</h3>
-            <p className="text-sm text-slate-500 mb-4">Añade una nueva categoría para organizar tus oraciones.</p>
+            <h3 className="font-medium text-slate-800 dark:text-white mb-2">Crear nuevo tema</h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">Añade una nueva categoría para organizar tus oraciones.</p>
             <form onSubmit={addTopic} className="w-full max-w-xs flex flex-col gap-4">
-              <div className="flex gap-2 overflow-x-auto pb-2 justify-start sm:justify-center px-1 scrollbar-thin scrollbar-thumb-slate-200">
+              <div className="flex gap-2 overflow-x-auto pb-2 justify-start sm:justify-center px-1 scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-700">
                 {Object.keys(AVAILABLE_ICONS).map(iconName => {
                   const IconComponent = AVAILABLE_ICONS[iconName];
                   return (
@@ -901,7 +923,7 @@ export default function App() {
                       key={iconName}
                       type="button"
                       onClick={() => setNewTopicIcon(iconName)}
-                      className={`p-2 rounded-xl flex-shrink-0 transition-colors ${newTopicIcon === iconName ? 'bg-blue-100 text-blue-600 shadow-sm border border-blue-200' : 'text-slate-400 hover:bg-slate-200 border border-transparent'}`}
+                      className={`p-2 rounded-xl flex-shrink-0 transition-colors ${newTopicIcon === iconName ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 shadow-sm border border-blue-200 dark:border-blue-800' : 'text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 border border-transparent'}`}
                       title={iconName}
                     >
                       <IconComponent className="w-5 h-5" />
@@ -915,12 +937,12 @@ export default function App() {
                   value={newTopicTitle}
                   onChange={(e) => setNewTopicTitle(e.target.value)}
                   placeholder="Ej. Trabajo, Viajes..."
-                  className="w-full bg-white border border-slate-200 rounded-lg pl-4 pr-12 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm"
+                  className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg pl-4 pr-12 py-3 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all shadow-sm dark:text-white"
                 />
                 <button
                   type="submit"
                   disabled={!newTopicTitle.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 disabled:text-slate-300 hover:text-blue-700 transition-colors bg-slate-50 rounded-md disabled:bg-transparent"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-blue-600 dark:text-blue-400 disabled:text-slate-300 dark:disabled:text-slate-600 hover:text-blue-700 dark:hover:text-blue-300 transition-colors bg-slate-50 dark:bg-slate-800 rounded-md disabled:bg-transparent"
                 >
                   <Plus className="w-5 h-5" />
                 </button>
@@ -932,30 +954,30 @@ export default function App() {
 
       {/* Settings Modal */}
       {isSettingsOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
-              <h2 className="text-lg font-semibold text-slate-800 flex items-center gap-2">
-                <Settings className="w-5 h-5 text-slate-500" />
+        <div className="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/50 shrink-0">
+              <h2 className="text-lg font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                 Configuración
               </h2>
-              <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 hover:text-slate-600 p-1">
+              <button onClick={() => setIsSettingsOpen(false)} className="text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 p-1">
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-6 space-y-6 overflow-y-auto">
               <div>
-                <h3 className="text-sm font-medium text-slate-900 mb-3">Notificaciones</h3>
+                <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-3">Notificaciones</h3>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm text-slate-600">Activar recordatorios</span>
+                  <span className="text-sm text-slate-600 dark:text-slate-300">Activar recordatorios</span>
                   <button
                     onClick={toggleNotifications}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationsEnabled ? 'bg-blue-600' : 'bg-slate-200'}`}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${notificationsEnabled ? 'bg-blue-600 dark:bg-blue-500' : 'bg-slate-200 dark:bg-slate-600'}`}
                   >
                     <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${notificationsEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
                   </button>
                 </div>
-                <p className="text-xs text-slate-500 mb-4">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
                   Si tu navegador no soporta notificaciones web, te mostraremos un recordatorio dentro de la aplicación cuando la tengas abierta. Para recibir avisos con la app cerrada, instálala como aplicación (PWA) y asegúrate de dar permisos.
                 </p>
               </div>
@@ -964,14 +986,14 @@ export default function App() {
                 <>
                   <div className="space-y-4">
                     <div>
-                      <h3 className="text-sm font-medium text-slate-900 mb-2">Frecuencia</h3>
+                      <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-2">Frecuencia</h3>
                       <div className="flex gap-3">
-                        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                          <input type="radio" name="frequency" value="daily" checked={reminderFrequency === 'daily'} onChange={() => setReminderFrequency('daily')} className="text-blue-600 focus:ring-blue-500" />
+                        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                          <input type="radio" name="frequency" value="daily" checked={reminderFrequency === 'daily'} onChange={() => setReminderFrequency('daily')} className="text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600" />
                           Diaria
                         </label>
-                        <label className="flex items-center gap-2 text-sm text-slate-700 cursor-pointer">
-                          <input type="radio" name="frequency" value="weekly" checked={reminderFrequency === 'weekly'} onChange={() => setReminderFrequency('weekly')} className="text-blue-600 focus:ring-blue-500" />
+                        <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300 cursor-pointer">
+                          <input type="radio" name="frequency" value="weekly" checked={reminderFrequency === 'weekly'} onChange={() => setReminderFrequency('weekly')} className="text-blue-600 dark:text-blue-500 focus:ring-blue-500 dark:bg-slate-700 dark:border-slate-600" />
                           Semanal
                         </label>
                       </div>
@@ -979,7 +1001,7 @@ export default function App() {
 
                     {reminderFrequency === 'weekly' && (
                       <div>
-                        <h3 className="text-sm font-medium text-slate-900 mb-2">Días de la semana</h3>
+                        <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-2">Días de la semana</h3>
                         <div className="flex gap-2">
                           {[{id: 1, l: 'L'}, {id: 2, l: 'M'}, {id: 3, l: 'X'}, {id: 4, l: 'J'}, {id: 5, l: 'V'}, {id: 6, l: 'S'}, {id: 0, l: 'D'}].map(day => (
                             <button
@@ -991,7 +1013,7 @@ export default function App() {
                                   setReminderDays([...reminderDays, day.id]);
                                 }
                               }}
-                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${reminderDays.includes(day.id) ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-colors ${reminderDays.includes(day.id) ? 'bg-blue-600 dark:bg-blue-500 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}
                             >
                               {day.l}
                             </button>
@@ -1001,46 +1023,46 @@ export default function App() {
                     )}
 
                     <div>
-                      <h3 className="text-sm font-medium text-slate-900 mb-2">Hora del recordatorio</h3>
+                      <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-2">Hora del recordatorio</h3>
                       <input
                         type="time"
                         value={reminderTime}
                         onChange={(e) => setReminderTime(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:text-white"
                       />
                     </div>
                   </div>
 
-                  <div className="pt-4 border-t border-slate-100">
-                    <h3 className="text-sm font-medium text-slate-900 mb-3 flex items-center gap-2">
-                      <BellOff className="w-4 h-4 text-slate-500" />
+                  <div className="pt-4 border-t border-slate-100 dark:border-slate-700">
+                    <h3 className="text-sm font-medium text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                      <BellOff className="w-4 h-4 text-slate-500 dark:text-slate-400" />
                       Silenciar notificaciones
                     </h3>
                     
                     {mutedUntil && mutedUntil > Date.now() ? (
-                      <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex items-center justify-between">
-                        <span className="text-sm text-amber-800">
+                      <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 rounded-lg p-3 flex items-center justify-between">
+                        <span className="text-sm text-amber-800 dark:text-amber-300">
                           Silenciadas hasta: {new Date(mutedUntil).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                         </span>
-                        <button onClick={unmute} className="text-sm font-medium text-amber-900 hover:text-amber-700 bg-amber-100 px-3 py-1 rounded-md transition-colors">
+                        <button onClick={unmute} className="text-sm font-medium text-amber-900 dark:text-amber-200 hover:text-amber-700 dark:hover:text-amber-100 bg-amber-100 dark:bg-amber-900/50 px-3 py-1 rounded-md transition-colors">
                           Reactivar
                         </button>
                       </div>
                     ) : (
                       <div className="flex flex-wrap gap-2">
-                        <button onClick={() => muteForHours(1)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors">1 hora</button>
-                        <button onClick={() => muteForHours(4)} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors">4 horas</button>
-                        <button onClick={muteUntilTomorrow} className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm rounded-lg transition-colors">Hasta mañana</button>
+                        <button onClick={() => muteForHours(1)} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 text-sm rounded-lg transition-colors">1 hora</button>
+                        <button onClick={() => muteForHours(4)} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 text-sm rounded-lg transition-colors">4 horas</button>
+                        <button onClick={muteUntilTomorrow} className="px-3 py-1.5 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-300 text-sm rounded-lg transition-colors">Hasta mañana</button>
                       </div>
                     )}
                   </div>
                 </>
               )}
             </div>
-            <div className="p-5 border-t border-slate-100 bg-slate-50 flex justify-end shrink-0">
+            <div className="p-5 border-t border-slate-100 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex justify-end shrink-0">
               <button
                 onClick={saveSettings}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+                className="px-4 py-2 bg-blue-600 dark:bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors"
               >
                 Guardar y cerrar
               </button>
@@ -1051,13 +1073,13 @@ export default function App() {
 
       {/* Confirm Dialog */}
       {confirmDialog.isOpen && (
-        <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-6">
-            <h3 className="text-lg font-semibold text-slate-900 mb-2">{confirmDialog.title}</h3>
-            <p className="text-slate-600 mb-6 text-sm">{confirmDialog.message}</p>
+        <div className="fixed inset-0 bg-slate-900/50 dark:bg-slate-900/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm overflow-hidden p-6">
+            <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">{confirmDialog.title}</h3>
+            <p className="text-slate-600 dark:text-slate-300 mb-6 text-sm">{confirmDialog.message}</p>
             <div className="flex justify-end gap-3">
-              <button onClick={() => setConfirmDialog({...confirmDialog, isOpen: false})} className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg text-sm font-medium transition-colors">Cancelar</button>
-              <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({...confirmDialog, isOpen: false}); }} className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors">Confirmar</button>
+              <button onClick={() => setConfirmDialog({...confirmDialog, isOpen: false})} className="px-4 py-2 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg text-sm font-medium transition-colors">Cancelar</button>
+              <button onClick={() => { confirmDialog.onConfirm(); setConfirmDialog({...confirmDialog, isOpen: false}); }} className="px-4 py-2 bg-red-600 dark:bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-700 dark:hover:bg-red-600 transition-colors">Confirmar</button>
             </div>
           </div>
         </div>
@@ -1065,7 +1087,7 @@ export default function App() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white px-5 py-3 rounded-full shadow-lg z-50 text-sm flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 dark:bg-slate-700 text-white px-5 py-3 rounded-full shadow-lg z-50 text-sm flex items-center gap-2 animate-in fade-in slide-in-from-bottom-4">
           <AlertCircle className="w-4 h-4 text-blue-400" />
           {toast}
         </div>
@@ -1074,18 +1096,18 @@ export default function App() {
       {/* In-App Reminder Modal */}
       {activeReminder && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-8 text-center relative animate-in fade-in zoom-in duration-300">
-            <div className="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
-            <div className="w-20 h-20 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl shadow-2xl w-full max-w-sm overflow-hidden p-8 text-center relative animate-in fade-in zoom-in duration-300">
+            <div className="absolute top-0 left-0 w-full h-2 bg-blue-600 dark:bg-blue-500"></div>
+            <div className="w-20 h-20 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
               <Bell className="w-10 h-10 animate-bounce" />
             </div>
-            <h3 className="text-2xl font-bold text-slate-900 mb-3">¡Tiempo de Orar!</h3>
-            <p className="text-slate-600 mb-8 text-base">
+            <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-3">¡Tiempo de Orar!</h3>
+            <p className="text-slate-600 dark:text-slate-300 mb-8 text-base">
               "Perseverad en la oración, velando en ella con acción de gracias."
             </p>
             <button 
               onClick={() => setActiveReminder(false)} 
-              className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl text-base font-medium hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+              className="w-full px-6 py-3 bg-blue-600 dark:bg-blue-500 text-white rounded-xl text-base font-medium hover:bg-blue-700 dark:hover:bg-blue-600 transition-colors shadow-md hover:shadow-lg"
             >
               Comenzar a orar
             </button>
