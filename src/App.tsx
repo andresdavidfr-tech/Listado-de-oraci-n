@@ -173,6 +173,7 @@ export default function App() {
     if (!user) return;
     try {
       await setDoc(doc(db, 'users', user.uid), {
+        email: user.email,
         topics,
         vow,
         lastResetDate,
@@ -306,6 +307,7 @@ export default function App() {
 
   const saveSettings = () => {
     setIsSettingsOpen(false);
+    saveToFirestore();
     showToast('Configuración guardada');
   };
 
