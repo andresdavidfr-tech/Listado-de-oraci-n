@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder } from 'lucide-react';
+import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder, Share2 } from 'lucide-react';
 import { Reorder } from 'motion/react';
 import { auth, db, googleProvider, outlookProvider } from './firebase';
 import { signInWithPopup, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
@@ -96,6 +96,7 @@ export default function App() {
   const [editingItemText, setEditingItemText] = useState('');
 
   const [activeReminder, setActiveReminder] = useState<boolean>(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
@@ -128,7 +129,17 @@ export default function App() {
         if (savedVow) setVow(JSON.parse(savedVow));
       }
     });
-    return () => unsubscribe();
+
+    const installHandler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', installHandler);
+
+    return () => {
+      unsubscribe();
+      window.removeEventListener('beforeinstallprompt', installHandler);
+    };
   }, []);
 
   // Firestore Sync
@@ -237,10 +248,21 @@ export default function App() {
           // Try native notification if allowed
           if ('Notification' in window && Notification.permission === 'granted') {
             try {
-              new Notification('Tiempo de Orar', {
-                body: 'Perseverad en la oración, velando en ella con acción de gracias.',
-                icon: '/favicon.ico'
-              });
+              if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.ready.then(registration => {
+                  registration.showNotification('Tiempo de Orar', {
+                    body: 'Perseverad en la oración, velando en ella con acción de gracias.',
+                    icon: 'https://picsum.photos/seed/prayer/192/192',
+                    badge: 'https://picsum.photos/seed/prayer/192/192',
+                    vibrate: [100, 50, 100],
+                  } as any);
+                });
+              } else {
+                new Notification('Tiempo de Orar', {
+                  body: 'Perseverad en la oración, velando en ella con acción de gracias.',
+                  icon: 'https://picsum.photos/seed/prayer/192/192'
+                });
+              }
             } catch (e) {
               // Ignore native error
             }
@@ -342,6 +364,17 @@ export default function App() {
     }
   };
 
+  const installPWA = () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    deferredPrompt.userChoice.then((choiceResult: any) => {
+      if (choiceResult.outcome === 'accepted') {
+        showToast('¡Gracias por instalar la aplicación!');
+      }
+      setDeferredPrompt(null);
+    });
+  };
+
   const addTopic = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTopicTitle.trim()) return;
@@ -432,6 +465,47 @@ export default function App() {
   const cancelEdit = () => {
     setEditingItemId(null);
     setEditingItemText('');
+  };
+
+  const handleShare = async (title: string, text: string) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: text,
+        });
+        showToast('Compartido con éxito');
+      } catch (error) {
+        if ((error as Error).name !== 'AbortError') {
+          fallbackShare(text);
+        }
+      }
+    } else {
+      fallbackShare(text);
+    }
+  };
+
+  const fallbackShare = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      showToast('Copiado al portapapeles');
+    }).catch(() => {
+      showToast('Error al compartir');
+    });
+  };
+
+  const shareTopic = (topic: Topic) => {
+    const title = `Motivos de oración: ${topic.title}`;
+    const itemsText = topic.items.length > 0
+      ? topic.items.map(item => `• ${item.text}`).join('\n')
+      : 'Aún no hay motivos específicos.';
+    const text = `🙏 Te comparto mis motivos de oración sobre "${topic.title}":\n\n${itemsText}\n\n¡Acompáñame en oración!`;
+    handleShare(title, text);
+  };
+
+  const shareItem = (topicTitle: string, item: PrayerItem) => {
+    const title = 'Motivo de oración';
+    const text = `🙏 Acompáñame a orar por este motivo (${topicTitle}):\n\n"${item.text}"`;
+    handleShare(title, text);
   };
 
   const toggleItemCheck = (topicId: string, itemId: string) => {
@@ -541,6 +615,15 @@ export default function App() {
             <h1 className="text-xl font-semibold text-slate-900">Diario de Oración</h1>
           </div>
           <div className="flex items-center space-x-2">
+            {deferredPrompt && (
+              <button
+                onClick={installPWA}
+                className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-full text-sm font-medium hover:bg-blue-700 transition-colors shadow-sm"
+              >
+                <Plus className="w-4 h-4" />
+                <span>Instalar App</span>
+              </button>
+            )}
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-xs font-medium text-slate-900">{user.displayName}</span>
@@ -668,13 +751,22 @@ export default function App() {
                   </div>
                   <h3 className="font-semibold text-lg sm:text-xl text-slate-800">{topic.title}</h3>
                 </div>
-                <button 
-                  onClick={() => deleteTopic(topic.id)}
-                  className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-white hover:bg-red-50 rounded-md shadow-sm border border-slate-200"
-                  title="Eliminar tema"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => shareTopic(topic)}
+                    className="p-2 text-slate-400 hover:text-blue-600 transition-colors bg-white hover:bg-blue-50 rounded-md shadow-sm border border-slate-200"
+                    title="Compartir tema"
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                  <button 
+                    onClick={() => deleteTopic(topic.id)}
+                    className="p-2 text-slate-400 hover:text-red-500 transition-colors bg-white hover:bg-red-50 rounded-md shadow-sm border border-slate-200"
+                    title="Eliminar tema"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
               
               <div className="p-5 flex-1 flex flex-col">
@@ -742,6 +834,13 @@ export default function App() {
                               )}
                             </div>
                             <div className="flex items-center ml-2 space-x-1">
+                              <button
+                                onClick={() => shareItem(topic.title, item)}
+                                className="p-2 text-slate-400 hover:text-blue-600 transition-colors bg-slate-50 hover:bg-blue-50 rounded-md"
+                                title="Compartir motivo"
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
                               <button
                                 onClick={() => startEditing(item)}
                                 className="p-2 text-blue-500 hover:text-blue-700 transition-colors bg-blue-50 hover:bg-blue-100 rounded-md"
@@ -855,7 +954,7 @@ export default function App() {
                   </button>
                 </div>
                 <p className="text-xs text-slate-500 mb-4">
-                  Si tu navegador no soporta notificaciones web, te mostraremos un recordatorio dentro de la aplicación cuando la tengas abierta.
+                  Si tu navegador no soporta notificaciones web, te mostraremos un recordatorio dentro de la aplicación cuando la tengas abierta. Para recibir avisos con la app cerrada, instálala como aplicación (PWA) y asegúrate de dar permisos.
                 </p>
               </div>
               
