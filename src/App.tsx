@@ -178,6 +178,8 @@ export default function App() {
     try {
       await setDoc(doc(db, 'users', user.uid), {
         email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL,
         topics,
         vow,
         lastResetDate,
@@ -189,7 +191,7 @@ export default function App() {
           mutedUntil,
           darkMode
         }
-      });
+      }, { merge: true });
     } catch (error) {
       console.error("Error saving to Firestore:", error);
     }
@@ -644,7 +646,6 @@ export default function App() {
             <div className="flex items-center gap-3">
               <div className="hidden sm:flex flex-col items-end">
                 <span className="text-xs font-medium text-slate-900 dark:text-slate-200">{user.displayName}</span>
-                <button onClick={logout} className="text-[10px] text-red-500 hover:underline">Cerrar sesión</button>
               </div>
               {user.photoURL ? (
                 <img src={user.photoURL} alt="Profile" className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-600" referrerPolicy="no-referrer" />
@@ -662,24 +663,18 @@ export default function App() {
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             <button
-              onClick={toggleNotifications}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                notificationsEnabled 
-                  ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50' 
-                  : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-              }`}
-            >
-              <Bell className={`w-4 h-4 ${notificationsEnabled ? 'fill-blue-600 dark:fill-blue-400' : ''}`} />
-              <span className="hidden sm:inline">
-                {notificationsEnabled ? 'Recordatorios Activos' : 'Activar Recordatorios'}
-              </span>
-            </button>
-            <button
               onClick={() => setIsSettingsOpen(true)}
               className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
               title="Configuración"
             >
               <Settings className="w-5 h-5" />
+            </button>
+            <button
+              onClick={logout}
+              className="p-2 text-red-400 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-full transition-colors"
+              title="Cerrar sesión"
+            >
+              <LogOut className="w-5 h-5" />
             </button>
           </div>
         </div>
@@ -702,64 +697,6 @@ export default function App() {
               — {dailyVerse.ref} (Versión Recobro)
             </cite>
           </div>
-        </section>
-
-        {/* Voto de Oración Section */}
-        <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg sm:text-xl font-semibold text-slate-800 dark:text-white flex items-center gap-2">
-              <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
-              Voto de Oración
-            </h2>
-          </div>
-          {!vow.active ? (
-            <form onSubmit={startVow} className="space-y-4">
-              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">Consagra un tiempo específico diario para orar por motivos especiales.</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Días consagrados</label>
-                  <input type="number" min="1" value={vowForm.totalDays} onChange={e => setVowForm({...vowForm, totalDays: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" required />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Minutos por día</label>
-                  <input type="number" min="1" value={vowForm.minutesPerDay} onChange={e => setVowForm({...vowForm, minutesPerDay: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" required />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Motivos específicos</label>
-                <textarea value={vowForm.motives} onChange={e => setVowForm({...vowForm, motives: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" rows={2} required placeholder="Ej. Por la salvación de mi familia, por dirección..."></textarea>
-              </div>
-              <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">Iniciar Voto</button>
-            </form>
-          ) : (
-            <div className="space-y-5">
-              <div className="flex flex-wrap gap-3 text-sm font-medium">
-                <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-1.5 rounded-full"><Calendar className="w-4 h-4"/> Día {vow.daysCompleted} de {vow.totalDays}</div>
-                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-4 py-1.5 rounded-full"><Clock className="w-4 h-4"/> {vow.minutesPerDay} min/día</div>
-              </div>
-              
-              {/* Progress bar */}
-              <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5">
-                <div className="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(vow.daysCompleted / vow.totalDays) * 100}%` }}></div>
-              </div>
-
-              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl text-sm text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-700">
-                <strong className="block mb-1 text-slate-900 dark:text-white">Motivos consagrados:</strong> 
-                {vow.motives}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                <button 
-                  onClick={completeVowDay} 
-                  disabled={vow.lastCompletedDate === new Date().toDateString()}
-                  className="flex-1 sm:flex-none bg-green-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
-                >
-                  <CheckCircle2 className="w-5 h-5" />
-                  {vow.lastCompletedDate === new Date().toDateString() ? 'Día completado' : 'Marcar día completado'}
-                </button>
-                <button onClick={() => setConfirmDialog({isOpen: true, title: 'Cancelar Voto', message: '¿Estás seguro de cancelar tu voto de oración actual? Perderás el progreso.', onConfirm: cancelVow})} className="px-6 py-2.5 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Cancelar Voto</button>
-              </div>
-            </div>
-          )}
         </section>
 
         {/* Topics Grid */}
@@ -950,6 +887,64 @@ export default function App() {
             </form>
           </div>
         </div>
+
+        {/* Voto de Oración Section */}
+        <section className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6 sm:p-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-lg sm:text-xl font-semibold text-slate-800 dark:text-white flex items-center gap-2">
+              <Target className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+              Voto de Oración
+            </h2>
+          </div>
+          {!vow.active ? (
+            <form onSubmit={startVow} className="space-y-4">
+              <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">Consagra un tiempo específico diario para orar por motivos especiales.</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Días consagrados</label>
+                  <input type="number" min="1" value={vowForm.totalDays} onChange={e => setVowForm({...vowForm, totalDays: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Minutos por día</label>
+                  <input type="number" min="1" value={vowForm.minutesPerDay} onChange={e => setVowForm({...vowForm, minutesPerDay: parseInt(e.target.value)})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" required />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Motivos específicos</label>
+                <textarea value={vowForm.motives} onChange={e => setVowForm({...vowForm, motives: e.target.value})} className="w-full bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white" rows={2} required placeholder="Ej. Por la salvación de mi familia, por dirección..."></textarea>
+              </div>
+              <button type="submit" className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors">Iniciar Voto</button>
+            </form>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-wrap gap-3 text-sm font-medium">
+                <div className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-4 py-1.5 rounded-full"><Calendar className="w-4 h-4"/> Día {vow.daysCompleted} de {vow.totalDays}</div>
+                <div className="flex items-center gap-1.5 bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400 px-4 py-1.5 rounded-full"><Clock className="w-4 h-4"/> {vow.minutesPerDay} min/día</div>
+              </div>
+              
+              {/* Progress bar */}
+              <div className="w-full bg-slate-100 dark:bg-slate-700 rounded-full h-2.5">
+                <div className="bg-blue-600 dark:bg-blue-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${(vow.daysCompleted / vow.totalDays) * 100}%` }}></div>
+              </div>
+
+              <div className="bg-slate-50 dark:bg-slate-900 p-4 rounded-xl text-sm text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-700">
+                <strong className="block mb-1 text-slate-900 dark:text-white">Motivos consagrados:</strong> 
+                {vow.motives}
+              </div>
+              <div className="flex flex-wrap gap-3">
+                <button 
+                  onClick={completeVowDay} 
+                  disabled={vow.lastCompletedDate === new Date().toDateString()}
+                  className="flex-1 sm:flex-none bg-green-600 text-white px-6 py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                >
+                  <CheckCircle2 className="w-5 h-5" />
+                  {vow.lastCompletedDate === new Date().toDateString() ? 'Día completado' : 'Marcar día completado'}
+                </button>
+                <button onClick={() => setConfirmDialog({isOpen: true, title: 'Cancelar Voto', message: '¿Estás seguro de cancelar tu voto de oración actual? Perderás el progreso.', onConfirm: cancelVow})} className="px-6 py-2.5 border border-red-200 dark:border-red-900/50 text-red-600 dark:text-red-400 rounded-lg text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">Cancelar Voto</button>
+              </div>
+            </div>
+          )}
+        </section>
       </main>
 
       {/* Settings Modal */}
