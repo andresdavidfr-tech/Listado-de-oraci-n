@@ -309,8 +309,13 @@ export default function App() {
     try {
       await signInWithPopup(auth, googleProvider);
       showToast('Sesión iniciada con Google');
-    } catch (error) {
-      showToast('Error al iniciar sesión con Google');
+    } catch (error: any) {
+      console.error('Error de login con Google:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        showToast('Error: Dominio no autorizado en Firebase Console.');
+      } else {
+        showToast('Error al iniciar sesión con Google');
+      }
     }
   };
 
@@ -318,8 +323,13 @@ export default function App() {
     try {
       await signInWithPopup(auth, outlookProvider);
       showToast('Sesión iniciada con Outlook');
-    } catch (error) {
-      showToast('Error al iniciar sesión con Outlook');
+    } catch (error: any) {
+      console.error('Error de login con Outlook:', error);
+      if (error.code === 'auth/unauthorized-domain') {
+        showToast('Error: Dominio no autorizado en Firebase Console.');
+      } else {
+        showToast('Error al iniciar sesión con Outlook');
+      }
     }
   };
 
