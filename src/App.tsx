@@ -762,11 +762,11 @@ export default function App() {
             </div>
             <button
               onClick={startFocusMode}
-              className="hidden sm:flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+              className="flex items-center space-x-1 sm:space-x-2 px-3 sm:px-4 py-2 bg-indigo-600 text-white rounded-full text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
               title="Modo Enfoque"
             >
               <Target className="w-4 h-4" />
-              <span>Enfoque</span>
+              <span className="hidden min-[400px]:inline">Enfoque</span>
             </button>
             <button
               onClick={() => setDarkMode(!darkMode)}
@@ -1245,9 +1245,9 @@ export default function App() {
       )}
       {/* Focus Mode Overlay */}
       {focusMode.active && (
-        <div className="fixed inset-0 bg-white dark:bg-slate-900 z-[100] flex flex-col items-center justify-center p-6 animate-in fade-in duration-500">
-          <div className="absolute top-8 right-8 flex items-center gap-4">
-            <div className="text-2xl font-mono font-bold text-slate-400 dark:text-slate-500">
+        <div className="fixed inset-0 bg-white dark:bg-slate-900 z-[100] flex flex-col items-center justify-center p-4 sm:p-6 animate-in fade-in duration-500">
+          <div className="absolute top-4 right-4 sm:top-8 sm:right-8 flex items-center gap-4">
+            <div className="text-xl sm:text-2xl font-mono font-bold text-slate-400 dark:text-slate-500">
               {formatTime(focusMode.timer)}
             </div>
             <button 
@@ -1255,61 +1255,61 @@ export default function App() {
               className="p-2 text-slate-400 hover:text-red-500 transition-colors"
               title="Salir del modo enfoque"
             >
-              <X className="w-8 h-8" />
+              <X className="w-6 h-6 sm:w-8 sm:h-8" />
             </button>
           </div>
 
-          <div className="max-w-2xl w-full text-center space-y-12">
-            <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-sm font-bold uppercase tracking-widest">
+          <div className="max-w-2xl w-full text-center space-y-8 sm:space-y-12">
+            <div className="space-y-3 sm:space-y-4">
+              <div className="inline-flex items-center gap-2 px-3 py-1 sm:px-4 sm:py-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full text-xs sm:text-sm font-bold uppercase tracking-widest">
                 {topics.flatMap(t => t.items.map(i => ({ ...i, topicTitle: t.title })))[focusMode.currentIndex]?.topicTitle}
               </div>
-              <h2 className="text-4xl sm:text-6xl font-bold text-slate-900 dark:text-white leading-tight">
+              <h2 className="text-3xl sm:text-6xl font-bold text-slate-900 dark:text-white leading-tight px-2">
                 {topics.flatMap(t => t.items)[focusMode.currentIndex]?.text}
               </h2>
             </div>
 
-            <div className="flex items-center justify-center gap-8">
+            <div className="flex items-center justify-center gap-4 sm:gap-8">
               <button 
                 onClick={prevFocusItem}
-                className="p-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                className="p-2 sm:p-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               >
-                <ChevronLeft className="w-12 h-12" />
+                <ChevronLeft className="w-10 h-10 sm:w-12 sm:h-12" />
               </button>
               
               <button 
                 onClick={toggleFocusTimer}
-                className={`w-24 h-24 rounded-full flex items-center justify-center transition-all shadow-xl ${
+                className={`w-20 h-20 sm:w-24 sm:h-24 rounded-full flex items-center justify-center transition-all shadow-xl ${
                   focusMode.isRunning 
                     ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400' 
                     : 'bg-blue-600 dark:bg-blue-500 text-white'
                 }`}
               >
-                {focusMode.isRunning ? <Pause className="w-10 h-10" /> : <Play className="w-10 h-10 ml-1" />}
+                {focusMode.isRunning ? <Pause className="w-8 h-8 sm:w-10 sm:h-10" /> : <Play className="w-8 h-8 sm:w-10 sm:h-10 ml-1" />}
               </button>
 
               <button 
                 onClick={nextFocusItem}
-                className="p-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                className="p-2 sm:p-4 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
               >
-                <ChevronRight className="w-12 h-12" />
+                <ChevronRight className="w-10 h-10 sm:w-12 sm:h-12" />
               </button>
             </div>
 
-            <div className="flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-4 sm:gap-6">
               <button 
                 onClick={() => toggleItemInFocus(topics.flatMap(t => t.items)[focusMode.currentIndex]?.id)}
-                className={`flex items-center gap-3 px-8 py-4 rounded-2xl font-bold text-xl transition-all ${
+                className={`flex items-center gap-3 px-6 py-3 sm:px-8 sm:py-4 rounded-2xl font-bold text-lg sm:text-xl transition-all ${
                   topics.flatMap(t => t.items)[focusMode.currentIndex]?.checked
                     ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
-                {topics.flatMap(t => t.items)[focusMode.currentIndex]?.checked ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
+                {topics.flatMap(t => t.items)[focusMode.currentIndex]?.checked ? <CheckCircle2 className="w-5 h-5 sm:w-6 sm:h-6" /> : <Circle className="w-5 h-5 sm:w-6 sm:h-6" />}
                 {topics.flatMap(t => t.items)[focusMode.currentIndex]?.checked ? 'Orado' : 'Marcar como orado'}
               </button>
               
-              <div className="text-slate-400 dark:text-slate-500 font-medium">
+              <div className="text-slate-400 dark:text-slate-500 font-medium text-sm sm:text-base">
                 Motivo {focusMode.currentIndex + 1} de {topics.flatMap(t => t.items).length}
               </div>
             </div>
