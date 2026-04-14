@@ -75,6 +75,7 @@ export default function App() {
   // --- Auth State ---
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // --- State ---
   const [topics, setTopics] = useState<Topic[]>(DEFAULT_TOPICS);
@@ -419,6 +420,8 @@ export default function App() {
   };
 
   const loginWithGoogle = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
     try {
       await signInWithPopup(auth, googleProvider);
       showToast('Sesión iniciada con Google');
@@ -426,13 +429,21 @@ export default function App() {
       console.error('Error de login con Google:', error);
       if (error.code === 'auth/unauthorized-domain') {
         showToast('Error: Dominio no autorizado en Firebase Console.');
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        // Ignore this error as it's handled by the isLoggingIn state
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        showToast('Inicio de sesión cancelado');
       } else {
         showToast('Error al iniciar sesión con Google');
       }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
   const loginWithOutlook = async () => {
+    if (isLoggingIn) return;
+    setIsLoggingIn(true);
     try {
       await signInWithPopup(auth, outlookProvider);
       showToast('Sesión iniciada con Outlook');
@@ -440,9 +451,15 @@ export default function App() {
       console.error('Error de login con Outlook:', error);
       if (error.code === 'auth/unauthorized-domain') {
         showToast('Error: Dominio no autorizado en Firebase Console.');
+      } else if (error.code === 'auth/cancelled-popup-request') {
+        // Ignore
+      } else if (error.code === 'auth/popup-closed-by-user') {
+        showToast('Inicio de sesión cancelado');
       } else {
         showToast('Error al iniciar sesión con Outlook');
       }
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -675,13 +692,29 @@ export default function App() {
           <p className="text-slate-600 dark:text-slate-300 mb-8">Debes iniciar sesión para que tus datos, configuraciones e historial queden guardados de forma segura.</p>
           
           <div className="space-y-3">
-            <button onClick={loginWithGoogle} className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm">
-              <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
-              Continuar con Google
+            <button 
+              onClick={loginWithGoogle} 
+              disabled={isLoggingIn}
+              className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoggingIn ? (
+                <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
+              ) : (
+                <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
+              )}
+              {isLoggingIn ? 'Iniciando sesión...' : 'Continuar con Google'}
             </button>
-            <button onClick={loginWithOutlook} className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm">
-              <img src="https://www.microsoft.com/favicon.ico" className="w-5 h-5" alt="Outlook" />
-              Continuar con Outlook / Hotmail
+            <button 
+              onClick={loginWithOutlook} 
+              disabled={isLoggingIn}
+              className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoggingIn ? (
+                <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
+              ) : (
+                <img src="https://www.microsoft.com/favicon.ico" className="w-5 h-5" alt="Outlook" />
+              )}
+              {isLoggingIn ? 'Iniciando sesión...' : 'Continuar con Outlook / Hotmail'}
             </button>
           </div>
         </div>
