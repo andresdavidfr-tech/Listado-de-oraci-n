@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Bell, BookOpen, Plus, Trash2, CheckCircle2, Circle, Settings, X, Pencil, Check, GripVertical, Target, Calendar, Clock, AlertCircle, BellOff, LogIn, LogOut, User, Heart, Users, Briefcase, Home, Globe, Star, Sun, Shield, Book, Music, Coffee, Folder, Share2, Moon, ChevronLeft, ChevronRight, Pause, Play } from 'lucide-react';
 import { Reorder } from 'motion/react';
 import { auth, db, googleProvider, outlookProvider } from './firebase';
@@ -75,7 +75,7 @@ export default function App() {
   // --- Auth State ---
   const [user, setUser] = useState<FirebaseUser | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [loginProvider, setLoginProvider] = useState<'google' | 'outlook' | null>(null);
 
   // --- State ---
   const [topics, setTopics] = useState<Topic[]>(DEFAULT_TOPICS);
@@ -104,6 +104,9 @@ export default function App() {
 
   const [toast, setToast] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {} });
+
+  const lastSyncData = useRef<string>('');
+  const isInitialLoad = useRef<boolean>(true);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -150,30 +153,53 @@ export default function App() {
 
   // Firestore Sync
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      isInitialLoad.current = true;
+      lastSyncData.current = '';
+      return;
+    }
 
     const userDocRef = doc(db, 'users', user.uid);
     const unsubscribe = onSnapshot(userDocRef, (docSnap) => {
-      // Only update state if the snapshot is not from a local write
-      // to avoid reverting state while the user is interacting
       if (docSnap.exists() && !docSnap.metadata.hasPendingWrites) {
         const data = docSnap.data();
-        setTopics(data.topics || DEFAULT_TOPICS);
-        setVow(data.vow || { active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null });
-        setLastResetDate(data.lastResetDate || new Date().toDateString());
-        setHistory(data.history || []);
-        
         const settings = data.settings || {};
-        setNotificationsEnabled(settings.notificationsEnabled || false);
-        setReminderTime(settings.reminderTime || '08:00');
-        setReminderFrequency(settings.reminderFrequency || 'daily');
-        setReminderDays(settings.reminderDays || [0, 1, 2, 3, 4, 5, 6]);
-        setMutedUntil(settings.mutedUntil || null);
-        setDarkMode(settings.darkMode || false);
-      } else if (!docSnap.exists()) {
-        // Initialize user doc if it doesn't exist
+        
+        const serverState = {
+          topics: data.topics || DEFAULT_TOPICS,
+          vow: data.vow || { active: false, startDate: '', totalDays: 7, minutesPerDay: 15, motives: '', daysCompleted: 0, lastCompletedDate: null },
+          history: data.history || [],
+          lastResetDate: data.lastResetDate || new Date().toDateString(),
+          notificationsEnabled: settings.notificationsEnabled || false,
+          reminderTime: settings.reminderTime || '08:00',
+          reminderFrequency: settings.reminderFrequency || 'daily',
+          reminderDays: settings.reminderDays || [0, 1, 2, 3, 4, 5, 6],
+          mutedUntil: settings.mutedUntil || null,
+          darkMode: settings.darkMode || false
+        };
+
+        const serverJson = JSON.stringify(serverState);
+        
+        // Prevent loop and unnecessary state updates
+        if (serverJson !== lastSyncData.current) {
+          setTopics(serverState.topics);
+          setVow(serverState.vow);
+          setLastResetDate(serverState.lastResetDate);
+          setHistory(serverState.history);
+          setNotificationsEnabled(serverState.notificationsEnabled);
+          setReminderTime(serverState.reminderTime);
+          setReminderFrequency(serverState.reminderFrequency);
+          setReminderDays(serverState.reminderDays);
+          setMutedUntil(serverState.mutedUntil);
+          setDarkMode(serverState.darkMode);
+          
+          lastSyncData.current = serverJson;
+        }
+      } else if (!docSnap.exists() && isInitialLoad.current) {
+        // Doc doesn't exist and it's our first check: upload current state (guest data)
         saveToFirestore();
       }
+      isInitialLoad.current = false;
     });
 
     return () => unsubscribe();
@@ -181,30 +207,40 @@ export default function App() {
 
   const saveToFirestore = async () => {
     if (!user) return;
+    
+    const currentState = {
+      topics,
+      vow,
+      history,
+      lastResetDate,
+      settings: {
+        notificationsEnabled,
+        reminderTime,
+        reminderFrequency,
+        reminderDays,
+        mutedUntil,
+        darkMode
+      }
+    };
+
+    const currentJson = JSON.stringify(currentState);
+    if (currentJson === lastSyncData.current) return;
+
     try {
       await setDoc(doc(db, 'users', user.uid), {
-        email: user.email,
-        displayName: user.displayName,
-        photoURL: user.photoURL,
-        topics,
-        vow,
-        history,
-        lastResetDate,
-        settings: {
-          notificationsEnabled,
-          reminderTime,
-          reminderFrequency,
-          reminderDays,
-          mutedUntil,
-          darkMode
-        }
+        ...currentState,
+        email: user.email || null,
+        displayName: user.displayName || null,
+        photoURL: user.photoURL || null,
+        updatedAt: new Date().toISOString()
       }, { merge: true });
+      lastSyncData.current = currentJson;
     } catch (error) {
       console.error("Error saving to Firestore:", error);
     }
   };
 
-  // Save to local storage as fallback/guest mode
+  // Sync state to persistence (localStorage or Firestore)
   useEffect(() => {
     if (!user) {
       localStorage.setItem('prayer-topics', JSON.stringify(topics));
@@ -215,12 +251,17 @@ export default function App() {
       localStorage.setItem('prayer-reminder-freq', reminderFrequency);
       localStorage.setItem('prayer-reminder-days', JSON.stringify(reminderDays));
       localStorage.setItem('prayer-dark-mode', String(darkMode));
+      localStorage.setItem('prayer-last-reset', lastResetDate);
       if (mutedUntil) localStorage.setItem('prayer-muted-until', mutedUntil.toString());
       else localStorage.removeItem('prayer-muted-until');
     } else {
-      saveToFirestore();
+      // Debounced save for authenticated users
+      const timeoutId = setTimeout(() => {
+        saveToFirestore();
+      }, 1500);
+      return () => clearTimeout(timeoutId);
     }
-  }, [topics, notificationsEnabled, vow, history, reminderTime, reminderFrequency, reminderDays, mutedUntil, darkMode, user]);
+  }, [topics, notificationsEnabled, vow, history, reminderTime, reminderFrequency, reminderDays, mutedUntil, darkMode, lastResetDate, user]);
 
   // Apply dark mode class to html
   useEffect(() => {
@@ -420,8 +461,8 @@ export default function App() {
   };
 
   const loginWithGoogle = async () => {
-    if (isLoggingIn) return;
-    setIsLoggingIn(true);
+    if (loginProvider) return;
+    setLoginProvider('google');
     try {
       await signInWithPopup(auth, googleProvider);
       showToast('Sesión iniciada con Google');
@@ -430,20 +471,20 @@ export default function App() {
       if (error.code === 'auth/unauthorized-domain') {
         showToast('Error: Dominio no autorizado en Firebase Console.');
       } else if (error.code === 'auth/cancelled-popup-request') {
-        // Ignore this error as it's handled by the isLoggingIn state
+        // Ignore
       } else if (error.code === 'auth/popup-closed-by-user') {
         showToast('Inicio de sesión cancelado');
       } else {
         showToast('Error al iniciar sesión con Google');
       }
     } finally {
-      setIsLoggingIn(false);
+      setLoginProvider(null);
     }
   };
 
   const loginWithOutlook = async () => {
-    if (isLoggingIn) return;
-    setIsLoggingIn(true);
+    if (loginProvider) return;
+    setLoginProvider('outlook');
     try {
       await signInWithPopup(auth, outlookProvider);
       showToast('Sesión iniciada con Outlook');
@@ -459,12 +500,15 @@ export default function App() {
         showToast('Error al iniciar sesión con Outlook');
       }
     } finally {
-      setIsLoggingIn(false);
+      setLoginProvider(null);
     }
   };
 
   const logout = async () => {
     try {
+      if (user) {
+        await saveToFirestore();
+      }
       await signOut(auth);
       showToast('Sesión cerrada');
     } catch (error) {
@@ -694,27 +738,27 @@ export default function App() {
           <div className="space-y-3">
             <button 
               onClick={loginWithGoogle} 
-              disabled={isLoggingIn}
+              disabled={loginProvider !== null}
               className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoggingIn ? (
+              {loginProvider === 'google' ? (
                 <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
               ) : (
                 <img src="https://www.google.com/favicon.ico" className="w-5 h-5" alt="Google" />
               )}
-              {isLoggingIn ? 'Iniciando sesión...' : 'Continuar con Google'}
+              {loginProvider === 'google' ? 'Iniciando sesión...' : 'Continuar con Google'}
             </button>
             <button 
               onClick={loginWithOutlook} 
-              disabled={isLoggingIn}
+              disabled={loginProvider !== null}
               className="w-full flex items-center justify-center gap-3 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-200 px-4 py-3 rounded-xl font-medium hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {isLoggingIn ? (
+              {loginProvider === 'outlook' ? (
                 <div className="w-5 h-5 border-2 border-slate-300 border-t-blue-600 rounded-full animate-spin"></div>
               ) : (
                 <img src="https://www.microsoft.com/favicon.ico" className="w-5 h-5" alt="Outlook" />
               )}
-              {isLoggingIn ? 'Iniciando sesión...' : 'Continuar con Outlook / Hotmail'}
+              {loginProvider === 'outlook' ? 'Iniciando sesión...' : 'Continuar con Outlook / Hotmail'}
             </button>
           </div>
         </div>
